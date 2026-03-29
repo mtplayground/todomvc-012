@@ -1,0 +1,80 @@
+# TodoMVC Architecture Plan (Leptos + Axum + SQLite)
+
+## Tech Stack
+- Frontend: Leptos (SSR + hydration via cargo-leptos)
+- Backend: Axum (integrated via leptos_axum)
+- Database: SQLite via SQLx with compile-time checked queries
+- Build tool: cargo-leptos
+
+## Project Structure
+```
+todomvc-012/
+├── Cargo.toml              # workspace root
+├── src/
+│   ├── main.rs             # Axum server entry point (cfg server)
+│   ├── lib.rs              # Leptos app root, routing
+│   ├── model.rs            # Todo struct + DB logic (server only)
+│   ├── components/
+│   │   ├── mod.rs
+│   │   ├── todo_input.rs   # New todo input field
+│   │   ├── todo_item.rs    # Single todo row (toggle, edit, delete)
+│   │   ├── todo_list.rs    # Filtered list of todos
+│   │   └── footer.rs       # Filter links, count, clear-completed
+│   └── server_fns.rs       # All #[server] functions
+├── migrations/
+│   └── 001_create_todos.sql
+├── style/
+│   └── todo.css            # canonical TodoMVC CSS
+├── public/                 # static assets
+└── Dockerfile
+```
+
+## Data Model
+```rust
+struct Todo {
+    id: i64,
+    title: String,
+    completed: bool,
+    created_at: i64,  // unix timestamp for ordering
+}
+```
+
+## Server Functions (Issue dependencies)
+- `add_todo(title: String) -> Result<Todo>`        # Issue #4
+- `list_todos() -> Result<Vec<Todo>>`              # Issue #4
+- `toggle_todo(id: i64) -> Result<Todo>`           # Issue #6
+- `delete_todo(id: i64) -> Result<()>`             # Issue #7
+- `update_todo(id: i64, title: String) -> Result<Todo>`  # Issue #8
+- `toggle_all(completed: bool) -> Result<()>`      # Issue #9
+- `clear_completed() -> Result<()>`                # Issue #11
+
+## Component Hierarchy
+```
+App
+└── TodoApp (reactive signal: todos, filter)
+    ├── header > TodoInput
+    ├── section.main
+    │   ├── toggle-all checkbox
+    │   └── TodoList
+    │       └── TodoItem (per todo)
+    └── footer > Footer (count, filters, clear)
+```
+
+## Issue Dependencies
+1 → 2 → 4 → 5 → 6 → 7 → 8
+                ↓
+                3 (CSS can be added anytime, best after #5)
+9, 10, 11 depend on #5 (list rendered)
+12 depends on all server fns (#4,6,7,8,9,11)
+13 depends on all UI (#5-11)
+14 independent (Dockerfile + README)
+
+## Key Design Decisions
+- Use `RwSignal<Vec<Todo>>` at the App level; pass read/write handles down
+- Filter state stored as URL hash (#/ #/active #/completed) via Leptos router
+- SQLx pool stored in Axum state, passed to server fns via `use_context`
+- Use `leptos::server_fn::error::ServerFnError` for all server fn errors
+- TodoMVC canonical CSS loaded via `<Stylesheet>` in the app shell
+- `cargo-leptos` handles WASM compilation and asset serving
+- Inline editing: double-click sets `editing: Option<i64>` signal, blur/Enter saves
+- toggle-all: checked when ALL todos complete; clicking flips all to opposite state
