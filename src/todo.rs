@@ -66,6 +66,34 @@ pub async fn delete_todo(id: i64) -> Result<(), ServerFnError> {
     Ok(())
 }
 
+#[server(UpdateTodoTitle, "/api")]
+pub async fn update_todo_title(id: i64, title: String) -> Result<(), ServerFnError> {
+    use leptos_axum::extract;
+    use axum::Extension;
+    use sqlx::SqlitePool;
+
+    let Extension(pool): Extension<SqlitePool> = extract().await?;
+
+    let title = title.trim().to_string();
+    if title.is_empty() {
+        // Blank title deletes the todo
+        sqlx::query("DELETE FROM todos WHERE id = ?")
+            .bind(id)
+            .execute(&pool)
+            .await
+            .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e.to_string()))?;
+    } else {
+        sqlx::query("UPDATE todos SET title = ? WHERE id = ?")
+            .bind(&title)
+            .bind(id)
+            .execute(&pool)
+            .await
+            .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e.to_string()))?;
+    }
+
+    Ok(())
+}
+
 #[server(ToggleTodo, "/api")]
 pub async fn toggle_todo(id: i64) -> Result<(), ServerFnError> {
     use leptos_axum::extract;
