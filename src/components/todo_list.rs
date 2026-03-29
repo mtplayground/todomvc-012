@@ -1,9 +1,10 @@
 use leptos::*;
 use crate::todo::{get_todos, toggle_all};
 use super::todo_item::TodoItem;
+use super::footer::Filter;
 
 #[component]
-pub fn TodoList(refresh: ReadSignal<u32>) -> impl IntoView {
+pub fn TodoList(refresh: ReadSignal<u32>, filter: Signal<Filter>) -> impl IntoView {
     let todos = create_resource(
         move || refresh.get(),
         |_| async move { get_todos().await },
@@ -26,8 +27,15 @@ pub fn TodoList(refresh: ReadSignal<u32>) -> impl IntoView {
                         Ok(todo_list) => {
                             let all_completed = !todo_list.is_empty()
                                 && todo_list.iter().all(|t| t.completed);
+
+                            let current_filter = filter.get();
                             let items: Vec<_> = todo_list
                                 .into_iter()
+                                .filter(|todo| match current_filter {
+                                    Filter::All => true,
+                                    Filter::Active => !todo.completed,
+                                    Filter::Completed => todo.completed,
+                                })
                                 .map(|todo| {
                                     view! {
                                         <TodoItem
