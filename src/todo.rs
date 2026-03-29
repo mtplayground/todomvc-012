@@ -49,6 +49,40 @@ pub async fn get_todos() -> Result<Vec<Todo>, ServerFnError> {
     Ok(todos)
 }
 
+#[server(DeleteTodo, "/api")]
+pub async fn delete_todo(id: i64) -> Result<(), ServerFnError> {
+    use leptos_axum::extract;
+    use axum::Extension;
+    use sqlx::SqlitePool;
+
+    let Extension(pool): Extension<SqlitePool> = extract().await?;
+
+    sqlx::query("DELETE FROM todos WHERE id = ?")
+        .bind(id)
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e.to_string()))?;
+
+    Ok(())
+}
+
+#[server(ToggleTodo, "/api")]
+pub async fn toggle_todo(id: i64) -> Result<(), ServerFnError> {
+    use leptos_axum::extract;
+    use axum::Extension;
+    use sqlx::SqlitePool;
+
+    let Extension(pool): Extension<SqlitePool> = extract().await?;
+
+    sqlx::query("UPDATE todos SET completed = NOT completed WHERE id = ?")
+        .bind(id)
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e.to_string()))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 #[cfg(feature = "ssr")]
 mod tests {

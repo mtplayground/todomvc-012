@@ -1,4 +1,5 @@
 pub mod app;
+pub mod components;
 pub mod todo;
 
-pub use todo::{add_todo, get_todos, Todo};
+pub use todo::{add_todo, delete_todo, get_todos, toggle_todo, Todo};
