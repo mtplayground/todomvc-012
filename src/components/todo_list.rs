@@ -1,5 +1,5 @@
 use leptos::*;
-use crate::todo::get_todos;
+use crate::todo::{get_todos, toggle_all};
 use super::todo_item::TodoItem;
 
 #[component]
@@ -9,12 +9,23 @@ pub fn TodoList(refresh: ReadSignal<u32>) -> impl IntoView {
         |_| async move { get_todos().await },
     );
 
+    let handle_toggle_all = move |ev: ev::Event| {
+        let checked = event_target_checked(&ev);
+        spawn_local(async move {
+            if toggle_all(checked).await.is_ok() {
+                todos.refetch();
+            }
+        });
+    };
+
     view! {
         <section class="main">
             <Suspense fallback=move || view! { <p>"Loading..."</p> }>
                 {move || {
                     todos.get().map(|result| match result {
                         Ok(todo_list) => {
+                            let all_completed = !todo_list.is_empty()
+                                && todo_list.iter().all(|t| t.completed);
                             let items: Vec<_> = todo_list
                                 .into_iter()
                                 .map(|todo| {
@@ -29,6 +40,14 @@ pub fn TodoList(refresh: ReadSignal<u32>) -> impl IntoView {
                                 })
                                 .collect();
                             view! {
+                                <input
+                                    id="toggle-all"
+                                    class="toggle-all"
+                                    type="checkbox"
+                                    prop:checked=all_completed
+                                    on:change=handle_toggle_all
+                                />
+                                <label for="toggle-all">"Mark all as complete"</label>
                                 <ul class="todo-list">{items}</ul>
                             }.into_view()
                         }
