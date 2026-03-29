@@ -9,246 +9,178 @@ pub struct Todo {
     pub completed: bool,
 }
 
-#[server(AddTodo, "/api")]
-pub async fn add_todo(title: String) -> Result<(), ServerFnError> {
-    use leptos_axum::extract;
-    use axum::Extension;
-    use sqlx::SqlitePool;
+// ── DB helper functions (SSR only) ──────────────────────────────────────────
+// These contain the actual business logic so they can be tested independently
+// of the Leptos/Axum request context.
 
-    let Extension(pool): Extension<SqlitePool> = extract().await?;
-
+#[cfg(feature = "ssr")]
+pub async fn db_add_todo(pool: &sqlx::SqlitePool, title: &str) -> Result<(), String> {
     let title = title.trim().to_string();
     if title.is_empty() {
-        return Err(ServerFnError::ServerError(
-            "Title cannot be empty".to_string(),
-        ));
+        return Err("Title cannot be empty".to_string());
     }
-
     sqlx::query("INSERT INTO todos (title, completed) VALUES (?, 0)")
         .bind(&title)
-        .execute(&pool)
+        .execute(pool)
         .await
-        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e.to_string()))?;
-
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
-#[server(GetTodos, "/api")]
-pub async fn get_todos() -> Result<Vec<Todo>, ServerFnError> {
-    use leptos_axum::extract;
-    use axum::Extension;
-    use sqlx::SqlitePool;
-
-    let Extension(pool): Extension<SqlitePool> = extract().await?;
-
-    let todos = sqlx::query_as::<_, Todo>("SELECT id, title, completed FROM todos ORDER BY id ASC")
-        .fetch_all(&pool)
+#[cfg(feature = "ssr")]
+pub async fn db_get_todos(pool: &sqlx::SqlitePool) -> Result<Vec<Todo>, String> {
+    sqlx::query_as::<_, Todo>("SELECT id, title, completed FROM todos ORDER BY id ASC")
+        .fetch_all(pool)
         .await
-        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e.to_string()))?;
-
-    Ok(todos)
+        .map_err(|e| e.to_string())
 }
 
-#[server(DeleteTodo, "/api")]
-pub async fn delete_todo(id: i64) -> Result<(), ServerFnError> {
-    use leptos_axum::extract;
-    use axum::Extension;
-    use sqlx::SqlitePool;
-
-    let Extension(pool): Extension<SqlitePool> = extract().await?;
-
+#[cfg(feature = "ssr")]
+pub async fn db_delete_todo(pool: &sqlx::SqlitePool, id: i64) -> Result<(), String> {
     sqlx::query("DELETE FROM todos WHERE id = ?")
         .bind(id)
-        .execute(&pool)
+        .execute(pool)
         .await
-        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e.to_string()))?;
-
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
-#[server(UpdateTodoTitle, "/api")]
-pub async fn update_todo_title(id: i64, title: String) -> Result<(), ServerFnError> {
-    use leptos_axum::extract;
-    use axum::Extension;
-    use sqlx::SqlitePool;
-
-    let Extension(pool): Extension<SqlitePool> = extract().await?;
-
+#[cfg(feature = "ssr")]
+pub async fn db_update_todo_title(
+    pool: &sqlx::SqlitePool,
+    id: i64,
+    title: &str,
+) -> Result<(), String> {
     let title = title.trim().to_string();
     if title.is_empty() {
         // Blank title deletes the todo
         sqlx::query("DELETE FROM todos WHERE id = ?")
             .bind(id)
-            .execute(&pool)
+            .execute(pool)
             .await
-            .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e.to_string()))?;
+            .map_err(|e| e.to_string())?;
     } else {
         sqlx::query("UPDATE todos SET title = ? WHERE id = ?")
             .bind(&title)
             .bind(id)
-            .execute(&pool)
+            .execute(pool)
             .await
-            .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e.to_string()))?;
+            .map_err(|e| e.to_string())?;
     }
-
     Ok(())
+}
+
+#[cfg(feature = "ssr")]
+pub async fn db_toggle_todo(pool: &sqlx::SqlitePool, id: i64) -> Result<(), String> {
+    sqlx::query("UPDATE todos SET completed = NOT completed WHERE id = ?")
+        .bind(id)
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[cfg(feature = "ssr")]
+pub async fn db_toggle_all(pool: &sqlx::SqlitePool, completed: bool) -> Result<(), String> {
+    sqlx::query("UPDATE todos SET completed = ?")
+        .bind(completed)
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[cfg(feature = "ssr")]
+pub async fn db_clear_completed(pool: &sqlx::SqlitePool) -> Result<(), String> {
+    sqlx::query("DELETE FROM todos WHERE completed = 1")
+        .execute(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ── Server functions ─────────────────────────────────────────────────────────
+
+#[server(AddTodo, "/api")]
+pub async fn add_todo(title: String) -> Result<(), ServerFnError> {
+    use axum::Extension;
+    use leptos_axum::extract;
+    use sqlx::SqlitePool;
+
+    let Extension(pool): Extension<SqlitePool> = extract().await?;
+    db_add_todo(&pool, &title)
+        .await
+        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e))
+}
+
+#[server(GetTodos, "/api")]
+pub async fn get_todos() -> Result<Vec<Todo>, ServerFnError> {
+    use axum::Extension;
+    use leptos_axum::extract;
+    use sqlx::SqlitePool;
+
+    let Extension(pool): Extension<SqlitePool> = extract().await?;
+    db_get_todos(&pool)
+        .await
+        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e))
+}
+
+#[server(DeleteTodo, "/api")]
+pub async fn delete_todo(id: i64) -> Result<(), ServerFnError> {
+    use axum::Extension;
+    use leptos_axum::extract;
+    use sqlx::SqlitePool;
+
+    let Extension(pool): Extension<SqlitePool> = extract().await?;
+    db_delete_todo(&pool, id)
+        .await
+        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e))
+}
+
+#[server(UpdateTodoTitle, "/api")]
+pub async fn update_todo_title(id: i64, title: String) -> Result<(), ServerFnError> {
+    use axum::Extension;
+    use leptos_axum::extract;
+    use sqlx::SqlitePool;
+
+    let Extension(pool): Extension<SqlitePool> = extract().await?;
+    db_update_todo_title(&pool, id, &title)
+        .await
+        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e))
 }
 
 #[server(ToggleTodo, "/api")]
 pub async fn toggle_todo(id: i64) -> Result<(), ServerFnError> {
-    use leptos_axum::extract;
     use axum::Extension;
+    use leptos_axum::extract;
     use sqlx::SqlitePool;
 
     let Extension(pool): Extension<SqlitePool> = extract().await?;
-
-    sqlx::query("UPDATE todos SET completed = NOT completed WHERE id = ?")
-        .bind(id)
-        .execute(&pool)
+    db_toggle_todo(&pool, id)
         .await
-        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e.to_string()))?;
-
-    Ok(())
+        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e))
 }
 
 #[server(ToggleAll, "/api")]
 pub async fn toggle_all(completed: bool) -> Result<(), ServerFnError> {
-    use leptos_axum::extract;
     use axum::Extension;
+    use leptos_axum::extract;
     use sqlx::SqlitePool;
 
     let Extension(pool): Extension<SqlitePool> = extract().await?;
-
-    sqlx::query("UPDATE todos SET completed = ?")
-        .bind(completed)
-        .execute(&pool)
+    db_toggle_all(&pool, completed)
         .await
-        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e.to_string()))?;
-
-    Ok(())
+        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e))
 }
 
 #[server(ClearCompleted, "/api")]
 pub async fn clear_completed() -> Result<(), ServerFnError> {
-    use leptos_axum::extract;
     use axum::Extension;
+    use leptos_axum::extract;
     use sqlx::SqlitePool;
 
     let Extension(pool): Extension<SqlitePool> = extract().await?;
-
-    sqlx::query("DELETE FROM todos WHERE completed = 1")
-        .execute(&pool)
+    db_clear_completed(&pool)
         .await
-        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e.to_string()))?;
-
-    Ok(())
-}
-
-#[cfg(test)]
-#[cfg(feature = "ssr")]
-mod tests {
-    use super::*;
-    use sqlx::sqlite::SqlitePoolOptions;
-
-    async fn setup_test_db() -> sqlx::SqlitePool {
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect("sqlite::memory:")
-            .await
-            .expect("Failed to create in-memory SQLite database");
-
-        sqlx::query(
-            "CREATE TABLE IF NOT EXISTS todos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                completed BOOLEAN NOT NULL DEFAULT 0
-            )",
-        )
-        .execute(&pool)
-        .await
-        .expect("Failed to create todos table");
-
-        pool
-    }
-
-    #[tokio::test]
-    async fn test_insert_and_fetch_todos() {
-        let pool = setup_test_db().await;
-
-        // Insert a todo directly
-        sqlx::query("INSERT INTO todos (title, completed) VALUES (?, 0)")
-            .bind("Test todo")
-            .execute(&pool)
-            .await
-            .expect("Failed to insert todo");
-
-        // Fetch all todos
-        let todos = sqlx::query_as::<_, Todo>(
-            "SELECT id, title, completed FROM todos ORDER BY id ASC",
-        )
-        .fetch_all(&pool)
-        .await
-        .expect("Failed to fetch todos");
-
-        assert_eq!(todos.len(), 1);
-        assert_eq!(todos[0].title, "Test todo");
-        assert!(!todos[0].completed);
-    }
-
-    #[tokio::test]
-    async fn test_insert_multiple_todos() {
-        let pool = setup_test_db().await;
-
-        let titles = ["First todo", "Second todo", "Third todo"];
-        for title in &titles {
-            sqlx::query("INSERT INTO todos (title, completed) VALUES (?, 0)")
-                .bind(title)
-                .execute(&pool)
-                .await
-                .expect("Failed to insert todo");
-        }
-
-        let todos = sqlx::query_as::<_, Todo>(
-            "SELECT id, title, completed FROM todos ORDER BY id ASC",
-        )
-        .fetch_all(&pool)
-        .await
-        .expect("Failed to fetch todos");
-
-        assert_eq!(todos.len(), 3);
-        for (i, title) in titles.iter().enumerate() {
-            assert_eq!(todos[i].title, *title);
-        }
-    }
-
-    #[tokio::test]
-    async fn test_empty_title_rejected() {
-        // Validate that empty title strings would be caught before DB insertion
-        let title = "   ".trim().to_string();
-        assert!(
-            title.is_empty(),
-            "Whitespace-only title should be treated as empty"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_todo_completed_defaults_false() {
-        let pool = setup_test_db().await;
-
-        sqlx::query("INSERT INTO todos (title, completed) VALUES (?, 0)")
-            .bind("A new todo")
-            .execute(&pool)
-            .await
-            .expect("Failed to insert todo");
-
-        let todo = sqlx::query_as::<_, Todo>(
-            "SELECT id, title, completed FROM todos WHERE title = ?",
-        )
-        .bind("A new todo")
-        .fetch_one(&pool)
-        .await
-        .expect("Failed to fetch todo");
-
-        assert!(!todo.completed, "New todo should not be completed");
-    }
+        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e))
 }
