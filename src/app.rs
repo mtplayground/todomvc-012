@@ -7,6 +7,8 @@ pub fn App() -> impl IntoView {
     provide_meta_context();
     view! {
         <Stylesheet id="leptos" href="/pkg/todomvc.css"/>
+        <Link rel="stylesheet" href="/pkg/todomvc-common.css"/>
+        <Link rel="stylesheet" href="/pkg/todomvc-app.css"/>
         <Title text="TodoMVC"/>
         <Router>
             <main>
@@ -21,7 +23,8 @@ pub fn App() -> impl IntoView {
 #[component]
 fn HomePage() -> impl IntoView {
     view! {
-        <h1>"Hello, World!"</h1>
-        <p>"TodoMVC - Built with Leptos and Axum"</p>
+        <section class="todoapp">
+            <h1>"todos"</h1>
+        </section>
     }
 }
