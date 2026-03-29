@@ -111,6 +111,23 @@ pub async fn toggle_todo(id: i64) -> Result<(), ServerFnError> {
     Ok(())
 }
 
+#[server(ToggleAll, "/api")]
+pub async fn toggle_all(completed: bool) -> Result<(), ServerFnError> {
+    use leptos_axum::extract;
+    use axum::Extension;
+    use sqlx::SqlitePool;
+
+    let Extension(pool): Extension<SqlitePool> = extract().await?;
+
+    sqlx::query("UPDATE todos SET completed = ?")
+        .bind(completed)
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e.to_string()))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 #[cfg(feature = "ssr")]
 mod tests {
