@@ -6,6 +6,7 @@ pub fn TodoItem(todo: Todo, on_change: Callback<()>) -> impl IntoView {
     let id = todo.id;
     let (completed, set_completed) = create_signal(todo.completed);
     let (editing, set_editing) = create_signal(false);
+    let (title, set_title) = create_signal(todo.title.clone());
     let (edit_value, set_edit_value) = create_signal(todo.title.clone());
     let input_ref = create_node_ref::<html::Input>();
 
@@ -37,6 +38,8 @@ pub fn TodoItem(todo: Todo, on_change: Callback<()>) -> impl IntoView {
     };
 
     let start_editing = move |_| {
+        // Sync edit_value with the current committed title before entering edit mode
+        set_edit_value.set(title.get());
         set_editing.set(true);
         // Focus the input after it renders
         if let Some(input) = input_ref.get() {
@@ -48,11 +51,16 @@ pub fn TodoItem(todo: Todo, on_change: Callback<()>) -> impl IntoView {
     let commit_edit = {
         let on_change = on_change;
         move || {
-            let title = edit_value.get();
+            let trimmed = edit_value.get();
+            let trimmed = trimmed.trim().to_string();
             set_editing.set(false);
+            // Update the displayed title optimistically
+            set_title.set(trimmed.clone());
+            // Reset edit_value to match the new committed title
+            set_edit_value.set(trimmed.clone());
             let on_change = on_change;
             spawn_local(async move {
-                if update_todo_title(id, title).await.is_ok() {
+                if update_todo_title(id, trimmed).await.is_ok() {
                     on_change.call(());
                 }
             });
@@ -66,8 +74,8 @@ pub fn TodoItem(todo: Todo, on_change: Callback<()>) -> impl IntoView {
             if key == "Enter" {
                 commit_edit();
             } else if key == "Escape" {
-                // Cancel: restore original title and leave edit mode
-                set_edit_value.set(todo.title.clone());
+                // Cancel: restore committed title and leave edit mode
+                set_edit_value.set(title.get());
                 set_editing.set(false);
             }
         }
@@ -107,7 +115,7 @@ pub fn TodoItem(todo: Todo, on_change: Callback<()>) -> impl IntoView {
                     on:change=handle_toggle
                 />
                 <label on:dblclick=start_editing>{
-                    move || edit_value.get()
+                    move || title.get()
                 }</label>
                 <button class="destroy" on:click=handle_delete></button>
             </div>
