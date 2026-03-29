@@ -128,6 +128,22 @@ pub async fn toggle_all(completed: bool) -> Result<(), ServerFnError> {
     Ok(())
 }
 
+#[server(ClearCompleted, "/api")]
+pub async fn clear_completed() -> Result<(), ServerFnError> {
+    use leptos_axum::extract;
+    use axum::Extension;
+    use sqlx::SqlitePool;
+
+    let Extension(pool): Extension<SqlitePool> = extract().await?;
+
+    sqlx::query("DELETE FROM todos WHERE completed = 1")
+        .execute(&pool)
+        .await
+        .map_err(|e| ServerFnError::<server_fn::error::NoCustomError>::ServerError(e.to_string()))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 #[cfg(feature = "ssr")]
 mod tests {

@@ -14,7 +14,9 @@ pub fn App() -> impl IntoView {
         <Router>
             <main>
                 <Routes>
-                    <Route path="" view=TodoApp/>
+                    <Route path="/" view=TodoApp/>
+                    <Route path="/active" view=TodoApp/>
+                    <Route path="/completed" view=TodoApp/>
                 </Routes>
             </main>
         </Router>
