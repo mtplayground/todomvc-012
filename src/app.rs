@@ -1,6 +1,7 @@
 use leptos::*;
 use leptos_meta::*;
 use leptos_router::*;
+use crate::components::TodoApp;
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -13,18 +14,9 @@ pub fn App() -> impl IntoView {
         <Router>
             <main>
                 <Routes>
-                    <Route path="" view=HomePage/>
+                    <Route path="" view=TodoApp/>
                 </Routes>
             </main>
         </Router>
-    }
-}
-
-#[component]
-fn HomePage() -> impl IntoView {
-    view! {
-        <section class="todoapp">
-            <h1>"todos"</h1>
-        </section>
     }
 }
